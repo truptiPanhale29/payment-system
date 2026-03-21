@@ -12,4 +12,5 @@ public interface AccountService {
     AccountResponse getAccount(Long id);
     AccountResponse deposit(Long id, BigDecimal amount);
     AccountResponse withdraw(Long id, BigDecimal amount);
+    AccountResponse getAccountByAccountNumber(String accountNumber);
 }

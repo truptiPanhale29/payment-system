@@ -40,5 +40,10 @@ public class AccountController {
         return accountService.withdraw(id, amount);
     }
 
+    @GetMapping("/number/{accountNumber}")
+    public AccountResponse getAccountByAccountNumber(@PathVariable String accountNumber) {
+        return accountService.getAccountByAccountNumber(accountNumber);
+    }
+
 
 }

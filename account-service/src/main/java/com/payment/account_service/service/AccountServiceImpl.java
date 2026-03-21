@@ -56,6 +56,13 @@ public class AccountServiceImpl implements AccountService {
         Account savedAccount = accountRepository.save(account);
         return AccountMapper.toResponse(savedAccount);
     }
+
+    @Override
+    public AccountResponse getAccountByAccountNumber(String accountNumber) {
+        Account account = accountRepository.findByAccountNumber(accountNumber)
+                .orElseThrow(() -> new AccountException(404, "Account not found with account number: " + accountNumber));
+        return AccountMapper.toResponse(account);
+    }
 }
 
 
