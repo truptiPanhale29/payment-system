@@ -7,6 +7,8 @@ import com.payment.account_service.entity.AccountStatus;
 import com.payment.account_service.exception.AccountException;
 import com.payment.account_service.mapper.AccountMapper;
 import com.payment.account_service.repository.AccountRepository;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -29,6 +31,7 @@ public class AccountServiceImpl implements AccountService {
         return AccountMapper.toResponse(savedAccount);
     }
 
+    @Cacheable(value = "account", key = "#id")
     @Override
     public AccountResponse getAccount(Long id) {
         Account account = accountRepository.findById(id).
@@ -36,6 +39,7 @@ public class AccountServiceImpl implements AccountService {
         return AccountMapper.toResponse(account);
     }
 
+    @CacheEvict(value = "account", key = "#id")
     @Override
     public AccountResponse deposit(Long id, BigDecimal amount){
         Account account = accountRepository.findById(id)
@@ -45,6 +49,7 @@ public class AccountServiceImpl implements AccountService {
         return AccountMapper.toResponse(savedAccount);
     }
 
+    @CacheEvict(value = "account", key = "#id")
     @Override
     public AccountResponse withdraw(Long id, BigDecimal amount){
         Account account = accountRepository.findById(id)
