@@ -31,29 +31,60 @@ public class PaymentServiceImpl implements PaymentService {
     }
 
     @Override
-    public PaymentResponse initiatePayment(PaymentRequest request){
+    public PaymentResponse initiatePayment(PaymentRequest request) {
 
-        // Step 1 - Check from account exists and has sufficient balance
+        // Step 1 - Validate sender account
         AccountResponse fromAccount = restTemplate.getForObject(
                 "http://localhost:8081/api/accounts/number/" + request.getFromAccount(),
                 AccountResponse.class);
 
+        if (fromAccount == null) {
+            throw new PaymentException(404, "Sender account not found: " + request.getFromAccount());
+        }
+        if (!fromAccount.getStatus().equals("ACTIVE")) {
+            throw new PaymentException(400, "Sender account is not active: " + request.getFromAccount());
+        }
         if (fromAccount.getBalance().compareTo(request.getAmount()) < 0) {
             throw new PaymentException(400, "Insufficient balance in account: " + request.getFromAccount());
         }
 
-        // Step 2 - Check to account exists
-        restTemplate.getForObject(
+        // Step 2 - Validate receiver account
+        AccountResponse toAccount = restTemplate.getForObject(
                 "http://localhost:8081/api/accounts/number/" + request.getToAccount(),
                 AccountResponse.class);
 
-        // Step 3 - Create and save payment
+        if (toAccount == null) {
+            throw new PaymentException(404, "Receiver account not found: " + request.getToAccount());
+        }
+        if (!toAccount.getStatus().equals("ACTIVE")) {
+            throw new PaymentException(400, "Receiver account is not active: " + request.getToAccount());
+        }
+
+        // Step 3 - Withdraw from sender
+        restTemplate.put(
+                "http://localhost:8081/api/accounts/" + fromAccount.getId() + "/withdraw?amount=" + request.getAmount(),
+                null);
+
+        // Step 4 - Deposit to receiver with compensation on failure
+        try {
+            restTemplate.put(
+                    "http://localhost:8081/api/accounts/" + toAccount.getId() + "/deposit?amount=" + request.getAmount(),
+                    null);
+        } catch (Exception e) {
+            // Compensate - reverse the withdrawal
+            restTemplate.put(
+                    "http://localhost:8081/api/accounts/" + fromAccount.getId() + "/deposit?amount=" + request.getAmount(),
+                    null);
+            throw new PaymentException(500, "Payment failed during deposit. Withdrawal has been reversed.");
+        }
+
+        // Step 5 - Save payment as COMPLETED
         var payment = PaymentMapper.toEntity(request);
         payment.setPaymentId("PAY" + System.currentTimeMillis());
-        payment.setStatus(PaymentStatus.PENDING);
+        payment.setStatus(PaymentStatus.COMPLETED);
         var savedPayment = paymentRepository.save(payment);
 
-        // Step 4 - Publish event to Kafka
+        // Step 6 - Publish event to Kafka
         PaymentInitiatedEvent event = PaymentInitiatedEvent.builder()
                 .paymentId(savedPayment.getPaymentId())
                 .fromAccount(savedPayment.getFromAccount())
@@ -61,9 +92,9 @@ public class PaymentServiceImpl implements PaymentService {
                 .amount(savedPayment.getAmount())
                 .timestamp(savedPayment.getCreatedAt())
                 .build();
-        kafkaTemplate.send("payment-events", savedPayment.getPaymentId(),event);
+        kafkaTemplate.send("payment-events", savedPayment.getPaymentId(), event);
 
-        // Step 5 - Return response
+        // Step 7 - Return response
         return PaymentMapper.toResponse(savedPayment);
     }
 
